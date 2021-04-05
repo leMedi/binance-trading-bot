@@ -50,7 +50,7 @@ class DualMovingAvgs(Strategy):
 
   def rootine(self, msg):
     # self.logger.error('new tick', float(msg['k']['c']))
-    self.logger.debug('new tick'.format(float(msg['k']['c'])))
+    self.logger.debug('new tick {}'.format(float(msg['k']['c'])))
     
     last_price = float(msg['k']['c'])
     last_recorded_price = self._prices_df[-1]
@@ -77,20 +77,21 @@ class DualMovingAvgs(Strategy):
   def looking_for_buy(self):
     short_ma = self.get_moving_avg(window=self.short_ma_period)
     long_ma  = self.get_moving_avg(window=self.long_ma_period)
-    self.logger.debug('looking_for_buy -> short_ma: {} - long_ma: {}'.format(short_ma, long_ma), extra={'short_ma': short_ma, 'long_ma': long_ma})
+    self.logger.debug('looking_for_buy -> current_price: {} short_ma: {} - long_ma: {}'.format(self.last_price, short_ma, long_ma), extra={'short_ma': short_ma, 'long_ma': long_ma})
 
     if short_ma < long_ma:
       self._waiting_for_buy_signal = True
       self.logger.debug('in golden zone', extra={'short_ma': short_ma, 'long_ma': long_ma})
 
-      returns = self._prices_df.pct_change(5)
+      returns = self._prices_df.pct_change(self.short_ma_period)
       last_return = returns.tail(1)[0]
       
       if last_return > 0:
         # price is on the rise
         self.logger.debug('price is on the rise {} for the last {} ticks'.format(last_return, self.short_ma_period))
-        if short_ma/long_ma > (1-0.04):
-          buy_at = self.calc_price(price=long_ma, percentage=0)
+        self.logger.debug('short_ma/long_ma = {}'.format(short_ma/long_ma))
+        if short_ma/long_ma > (1-0.00001):
+          buy_at = self.calc_price(price=long_ma, percentage=0.002)
           self.logger.info('buying at {}'.format(buy_at), extra={'buy_at': buy_at})
           self.place_order(order_type=OrderType.BUY, limit_price=buy_at, order_by=OrderBy.VALUE, value=self._capital)
       return False
