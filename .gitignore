@@ -2,6 +2,9 @@
 
 *.log
 
+log.*
+info.*
+
 *.pyc
 
 .vscode

@@ -6,8 +6,6 @@ from pythonjsonlogger import jsonlogger
 import logging
 import logging.handlers
 import logging
-import os
-import sys
 
 class OrderType(Enum):
   SELL = "BUY"
@@ -49,7 +47,7 @@ class Strategy(ABC):
     self.interval = interval
     
     self.bm = BinanceSocketManager(self.binance_client)
-    ticks_conn_key = self.bm.start_kline_socket(self.pair, self.rootine, interval=interval)
+    ticks_conn_key = self.bm.start_kline_socket(self.pair, self._rootine, interval=interval)
     orders_conn_key = self.bm.start_user_socket(self.track_orders)
     
     self.setup()
@@ -57,39 +55,57 @@ class Strategy(ABC):
     
     self.logger.info('TRADING BOT STARTED')
 
-
   def stop(self):
     self.bm.close()
 
-  def place_order(self, order_type: OrderType, limit_price: float, order_by: OrderBy, value: float):
 
+  def place_real_order(self, order_type: OrderType, limit_price: float, qty: float):
+    self.logger.info('[ORDER] New: {} qty {} at_price {}'.format(order_type, qty, limit_price))
+    if order_type is OrderType.BUY:
+      self.open_order = self.binance_client.order_limit_buy(symbol=self.pair, quantity=qty, price=limit_price)
+    elif order_type is OrderType.SELL:
+      self.open_order = self.binance_client.order_limit_sell(symbol=self.pair, quantity=qty, price=limit_price)
+    else:
+      self.logger.error('Unknow order type:', order_type)
+      raise Exception('Unknow order type', order_type)
+    print('end place_order', self.open_order)
+
+
+  def place_fake_order(self, order_type: OrderType, limit_price: float, qty: float):
+    if order_type is OrderType.BUY or order_type is OrderType.SELL:
+      # self._open_postion(qty, limit_price)
+      self.open_order = {
+        'qty': qty,
+        'price': limit_price,
+        'type': order_type
+      }
+      
+    else:
+      self.logger.error('Unknow order type:', order_type)
+      raise Exception('Unknow order type', order_type)
+
+    self.logger.info('fake order placed')
+
+  def place_order(self, order_type: OrderType, limit_price: float, order_by: OrderBy, value: float):
     qty = value
     if order_by == OrderBy.VALUE:
       qty = value/limit_price
 
     qty = round(qty, 1)
     limit_price = round(limit_price, self.precision)
-    # self.logger.info('[ORDER] New:', order_type, 'qty', qty, 'at_price', limit_price)
-    self.logger.info('[ORDER] New: {} qty {} at_price {}'.format(order_type, qty, limit_price))
-    if order_type is OrderType.BUY:
-      self.open_order = self.binance_client.order_limit_buy(symbol=self.pair, quantity=qty, price=limit_price)
-    elif order_type is OrderType.SELL:
-      self.open_order = self.binance_client.order_limit_sell(symbol=self.pair, quantity=value, price=limit_price)
-    else:
-      self.logger.error('Unknow order type:', order_type)
-      raise Exception('Unknow order type', order_type)
-      
-    print('end place_order', self.open_order)
+
+    self.logger.info('[ORDER] new order: {} qty at_price {}'.format(order_type, limit_price))
+    self.place_fake_order(order_type, limit_price, qty)
 
   def track_orders(self, msg: any):
     # orders docs https://docs.binance.org/api-reference/dex-api/ws-streams.html
-    print('track_orders: ', msg)
+    self.logger.debug('track_orders: ', extra={'msg': msg})
     print('track_orders: ', msg['e'])
     if msg['e'] != 'executionReport' or msg['s'] != self.pair:
       print('not my order')
       return False
 
-    print('track_orders 2', msg)
+    print('new order filled', msg)
     if msg['X'] == 'NEW':
       print('NEW', msg)
       # self.logger.info('[ORDER] Created: id', msg['i'], msg['S'], msg['q'], 'for', msg['p'])
@@ -108,8 +124,8 @@ class Strategy(ABC):
       
   def _open_postion(self, qty: float, entry_price: float):
     self.position = {
-      qty: qty,
-      entry_price: entry_price
+      'qty': qty,
+      'entry_price': entry_price
     }
 
     # self.logger.info('[POSITION] OPENED', self.position)
@@ -123,65 +139,84 @@ class Strategy(ABC):
 
   def get_position_returns(self):
     if self.position is None:
-      raise Exception()
+      raise Exception('get_position_returns')
 
     return self.last_price/self.position['entry_price'] - 1
-
   #region Logger
 
   def init_logger(self, save_to_file: bool = False):
-    self.logger = logging.getLogger()
+    self.logger = logging.getLogger(self.name)
+    self.logger.setLevel(logging.DEBUG)
 
     handler = logging.StreamHandler()
     formatter = logging.Formatter(logging.BASIC_FORMAT)
     handler.setFormatter(formatter)
     self.logger.addHandler(handler)
 
-    if(save_to_file):
-      supported_keys = [
-        'asctime',
-        'levelname',
-        'filename',
-        'lineno',
-        'message',
-        'name',
-      ]
+    supported_keys = [
+      'asctime',
+      'levelname',
+      'filename',
+      'lineno',
+      'message',
+      'name',
+    ]
+    log_format = lambda x: ['%({0:s})s'.format(i) for i in x]
+    custom_json_format = ' '.join(log_format(supported_keys))
 
-      log_format = lambda x: ['%({0:s})s'.format(i) for i in x]
-      custom_format = ' '.join(log_format(supported_keys))
-      jsonLogHandler = logging.handlers.TimedRotatingFileHandler(os.environ.get("LOGFILE", "./yourapp.log"), when="m",interval=1,backupCount=2)
-      # jsonLogHandler = logging.handlers.WatchedFileHandler(os.environ.get("LOGFILE", "./yourapp.log"))
-      jsonLogFormater = jsonlogger.JsonFormatter(custom_format)
+    if save_to_file == True:
+      # all logs
+      log_file_name = 'log.{}'.format(self.name)
+      jsonLogHandler = logging.handlers.TimedRotatingFileHandler(log_file_name, when="midnight", interval=1)
+      jsonLogHandler.suffix = "%Y-%m-%d"
+      jsonLogFormater = jsonlogger.JsonFormatter(custom_json_format)
       jsonLogHandler.setFormatter(jsonLogFormater)
       self.logger.addHandler(jsonLogHandler)
+
+    if save_to_file == True:
+      # info logs
+      info_log_file_name = 'info.{}'.format(self.name)
+      jsonInfoLogFormater = jsonlogger.JsonFormatter(custom_json_format)
+      jsonInfoLogHandler = logging.handlers.TimedRotatingFileHandler(info_log_file_name, when="midnight", interval=1)
+      jsonInfoLogHandler.suffix = "%Y-%m-%d"
+      jsonInfoLogHandler.setFormatter(jsonInfoLogFormater)
+      jsonInfoLogHandler.setLevel(logging.INFO)
+      self.logger.addHandler(jsonInfoLogHandler)
     
-
-  # def log(self, log_type: LogType = LogType.INFO, *args):
-  #   _prefix = '[+]'
-  #   _color = 'green'
-  #   _attrs = []
-  #   _file = sys.stdout
-  #   if log_type is LogType.ERROR:
-  #     _prefix = '[!]'
-  #     _color= 'red'
-  #     _attrs = ['bold']
-  #     _file = sys.stderr
-
-  #   _prefix += ' ' + self.name + ' ' + self.pair 
-  #   msg = _prefix + ' ' +  ' '.join(map(str, args))
-  #   cprint(msg, _color, attrs=_attrs, file=_file)
-
-  # def info(self, *args):
-  #   self.log(LogType.INFO, *args)
-
-  # def error(self, *args):
-  #   self.log(LogType.ERROR, *args)
-  #endregion
-
   def _rootine(self, msg):
-    self.last_price = float(msg['k']['c'])
-    self.rootine(msg)
+    try:
+      self.last_price = float(msg['k']['c'])
 
+      self.track_fake_orders()
+
+      self.rootine(msg)
+    except Exception:
+      self.logger.exception("Fatal error in rootine")
+
+
+  def track_fake_orders(self):
+    if self.open_order is None:
+      return False
+
+    self.logger.debug('check fake order status: {} {} current price {}'.format(self.open_order['type'], self.open_order['price'], self.last_price))
+    if self.open_order['type'] is OrderType.BUY and self.last_price <= self.open_order['price']:
+      self.logger.debug('yes fake buy')
+      self._open_postion(self.open_order['qty'], self.last_price)
+      self.order_execution_hook()
+      self.open_order = None
+      return True
+
+    if self.open_order['type'] is OrderType.SELL and self.last_price >= self.open_order['price']:
+      self.logger.debug('yes fake sell')
+      self._close_position(self.last_price)
+      self.order_execution_hook()
+      self.open_order = None
+      return True
+
+    return False
+      
+      
+      
 
   @abstractmethod
   def setup(self):
@@ -192,5 +227,5 @@ class Strategy(ABC):
     pass
 
   @abstractmethod
-  def order_execution_hook(self, order):
+  def order_execution_hook(self):
     pass

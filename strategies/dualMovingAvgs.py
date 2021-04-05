@@ -26,9 +26,8 @@ class DualMovingAvgs(Strategy):
     short_ma = self.get_moving_avg(window=self.short_ma_period)
     long_ma = self.get_moving_avg(window=self.long_ma_period)
 
-    print(_prices_df.iloc[[-1]].index[0])
-
-    print(self._prices_df.iloc[[-1]].index[0], long_ma, short_ma)
+    # self.logger.debug(_prices_df.iloc[[-1]].index[0])
+    # self.logger.debug(self._prices_df.iloc[[-1]].index[0], long_ma, short_ma)
 
   def get_moving_avg(self, window: float) -> float:
     _ma_df = self._prices_df.rolling(window=window).mean()
@@ -51,20 +50,20 @@ class DualMovingAvgs(Strategy):
 
   def rootine(self, msg):
     # self.logger.error('new tick', float(msg['k']['c']))
-    self.logger.info('new tick'.format(float(msg['k']['c'])))
+    self.logger.debug('new tick'.format(float(msg['k']['c'])))
     
     last_price = float(msg['k']['c'])
     last_recorded_price = self._prices_df[-1]
 
     if last_price == last_recorded_price:
-      print('skip rootine')
+      self.logger.debug('skip rootine')
       return False
 
     self.update_prices_df(msg['k'])
 
     if self.open_order != None:
       # TODO: cancle unreachable orders
-      print('waiting for order to execute')
+      self.logger.debug('waiting for order to execute')
       return False
     
     if self.position == None:
@@ -72,27 +71,27 @@ class DualMovingAvgs(Strategy):
       return True
 
     if self.position != None:
-      print('postion is open - ', 'qty:', self.position.qty, 'returns: ', self.get_position_returns())
+      self.logger.debug('postion is open - qty: {} returns: {}'.format(self.position['qty'], self.get_position_returns()))
       return True
 
   def looking_for_buy(self):
     short_ma = self.get_moving_avg(window=self.short_ma_period)
     long_ma  = self.get_moving_avg(window=self.long_ma_period)
-    print('looking_for_buy', short_ma, long_ma)
+    self.logger.debug('looking_for_buy -> short_ma: {} - long_ma: {}'.format(short_ma, long_ma), extra={'short_ma': short_ma, 'long_ma': long_ma})
 
     if short_ma < long_ma:
       self._waiting_for_buy_signal = True
-      print('in golden zone', short_ma, long_ma)
+      self.logger.debug('in golden zone', extra={'short_ma': short_ma, 'long_ma': long_ma})
 
       returns = self._prices_df.pct_change(5)
       last_return = returns.tail(1)[0]
       
       if last_return > 0:
         # price is on the rise
-        print('price is on the rise', last_return, 'for the last', self.short_ma_period, 'ticks')
+        self.logger.debug('price is on the rise {} for the last {} ticks'.format(last_return, self.short_ma_period))
         if short_ma/long_ma > 0.998:
           buy_at = self.calc_price(price=long_ma, percentage=0)
-          print('buying at', buy_at)
+          self.logger.info('buying at {}'.format(buy_at), extra={'buy_at': buy_at})
           self.place_order(order_type=OrderType.BUY, limit_price=buy_at, order_by=OrderBy.VALUE, value=self._capital)
       return False
 
@@ -105,8 +104,8 @@ class DualMovingAvgs(Strategy):
   #   if returns >= 0.2:
       
 
-  def order_execution_hook(self, order):
+  def order_execution_hook(self):
     # orders docs https://docs.binance.org/api-reference/dex-api/ws-streams.html
     if self.position != None:
       sell_at = self.calc_price(price=self.last_price , percentage=0.03)
-      self.open_order(order_type=OrderType.SELL, limit_price=sell_at, order_by=OrderBy.QUANTITY, value=self.position.qty)
+      self.place_order(order_type=OrderType.SELL, limit_price=sell_at, order_by=OrderBy.QUANTITY, value=self.position['qty'])
