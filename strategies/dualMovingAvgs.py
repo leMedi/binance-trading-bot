@@ -89,9 +89,9 @@ class DualMovingAvgs(Strategy):
       if last_return > 0:
         # price is on the rise
         self.logger.debug('price is on the rise {} for the last {} ticks'.format(last_return, self.short_ma_period))
-        if short_ma/long_ma > 0.998:
+        if short_ma/long_ma > (1-0.04):
           buy_at = self.calc_price(price=long_ma, percentage=0)
-          self.logger.info('buying at {}'.format(buy_at), extra={'buy_at': buy_at})
+          self.logger.info('buying at {} ({} higher than last price)'.format(buy_at), extra={'buy_at': buy_at})
           self.place_order(order_type=OrderType.BUY, limit_price=buy_at, order_by=OrderBy.VALUE, value=self._capital)
       return False
 
@@ -107,5 +107,5 @@ class DualMovingAvgs(Strategy):
   def order_execution_hook(self):
     # orders docs https://docs.binance.org/api-reference/dex-api/ws-streams.html
     if self.position != None:
-      sell_at = self.calc_price(price=self.last_price , percentage=0.03)
+      sell_at = self.calc_price(price=self.last_price , percentage=0.01)
       self.place_order(order_type=OrderType.SELL, limit_price=sell_at, order_by=OrderBy.QUANTITY, value=self.position['qty'])
