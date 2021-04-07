@@ -41,7 +41,14 @@ class Strategy(ABC):
     self.precision = precision
 
     self.init_logger(save_to_file=True)
+    # self.load_checkpoint()
 
+
+  def load_checkpoint(self):
+    print('loading check point')
+    self._open_postion(40.2, 2.48504)
+    self.place_order(OrderType.SELL, 2.50989, OrderBy.QUANTITY, 40.2)
+    print('check point loaded')
     
   def run(self, interval: str = '1m'):
     self.interval = interval
