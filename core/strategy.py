@@ -94,7 +94,7 @@ class Strategy(ABC):
     qty = round(qty, 1)
     limit_price = round(limit_price, self.precision)
 
-    self.logger.info('[ORDER] new order: {} qty at_price {}'.format(order_type, limit_price))
+    self.logger.info('[ORDER] new order: {} qty {} at_price {}'.format(order_type, qty,limit_price))
     self.place_fake_order(order_type, limit_price, qty)
 
   def track_orders(self, msg: any):
