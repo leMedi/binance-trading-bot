@@ -132,16 +132,22 @@ class Strategy(ABC):
     self.logger.info('[POSITION] OPENED {}'.format(self.position))
 
   def _close_position(self, sold_at):
+    returns = self.calc_roi(self.position['entry_price'], sold_at)
+    new_capital = sold_at*self.position['qty']
     self.position = None
-    self._capital = sold_at
-    # self.logger.info('[POSITION] CLOSED', 'capital:', self._capital)
-    self.logger.info('[POSITION] CLOSED', 'capital: {}'.format(self._capital))
+    self._capital = new_capital
+    self.logger.info('[POSITION] CLOSED => sold at: {} with gains of {}'.format(sold_at, returns))
+    self.logger.info('[POSITION] CLOSED => new capital {}'.format(self._capital))
+
+  def calc_roi(self, entry_price, exit_price):
+    return exit_price/entry_price - 1
 
   def get_position_returns(self):
     if self.position is None:
       raise Exception('get_position_returns')
 
-    return self.last_price/self.position['entry_price'] - 1
+    return self.calc_roi(self.position['entry_price'], self.last_price)
+    # return self.last_price/self.position['entry_price'] - 1
   #region Logger
 
   def init_logger(self, save_to_file: bool = False):
