@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from enum import Enum
 from termcolor import cprint
 from binance.websockets import BinanceSocketManager
@@ -24,7 +25,8 @@ class LogType(Enum):
   ERROR = '[!]'
 
 class Strategy(ABC):
-  interval = '1m'
+  interval_timedelta = None
+  last_tick_datetime = None
   open_order = None
   position = None
 
@@ -51,7 +53,7 @@ class Strategy(ABC):
     print('check point loaded')
     
   def run(self, interval: str = '1m'):
-    self.interval = interval
+    self.interval_timedelta = timedelta(minutes=1)
     
     self.bm = BinanceSocketManager(self.binance_client)
     ticks_conn_key = self.bm.start_kline_socket(self.pair, self._rootine, interval=interval)
@@ -197,7 +199,15 @@ class Strategy(ABC):
       self.logger.addHandler(jsonInfoLogHandler)
     
   def _rootine(self, msg):
+    now = datetime.now()
+
+    if self.last_tick_datetime is not None and now - self.last_tick_datetime < self.interval_timedelta:
+      print('tick interval is less that 1m', now - self.last_tick_datetime)
+      print('skip routine: not in interval')
+      return False
+
     try:
+      self.last_tick_datetime = now
       self.last_price = float(msg['k']['c'])
 
       self.track_fake_orders()
