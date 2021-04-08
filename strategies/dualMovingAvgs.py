@@ -90,8 +90,8 @@ class DualMovingAvgs(Strategy):
         # price is on the rise
         self.logger.debug('price is on the rise {} for the last {} ticks'.format(last_return, self.short_ma_period))
         self.logger.debug('short_ma/long_ma = {}'.format(short_ma/long_ma))
-        if short_ma/long_ma > (1-0.00001):
-          buy_at = self.calc_price(price=self.last_price, percentage=0.00001)
+        if short_ma/long_ma > (1-0.002):
+          buy_at = self.calc_price(price=self.last_price, percentage=0.002)
           self.logger.info('buying at {}'.format(buy_at), extra={'buy_at': buy_at})
           self.place_order(order_type=OrderType.BUY, limit_price=buy_at, order_by=OrderBy.VALUE, value=self._capital)
       return False
