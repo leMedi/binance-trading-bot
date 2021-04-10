@@ -206,6 +206,9 @@ class Strategy(ABC):
       print('skip routine: not in interval')
       return False
 
+    if self.position != None:
+      self.logger.debug('postion is open - qty: {} returns: {}'.format(self.position['qty'], self.get_position_returns()))
+
     try:
       self.last_tick_datetime = now
       self.last_price = float(msg['k']['c'])

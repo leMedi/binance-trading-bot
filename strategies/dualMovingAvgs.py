@@ -71,10 +71,6 @@ class DualMovingAvgs(Strategy):
       self.looking_for_buy()
       return True
 
-    if self.position != None:
-      self.logger.debug('postion is open - qty: {} returns: {}'.format(self.position['qty'], self.get_position_returns()))
-      return True
-
   def looking_for_buy(self):
     short_ma = self.get_moving_avg(window=self.short_ma_period)
     long_ma  = self.get_moving_avg(window=self.long_ma_period)
