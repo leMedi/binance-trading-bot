@@ -67,6 +67,7 @@ class DualMovingAvgs(Strategy):
       return False
     
     if self.position == None:
+      # i want to buy something: listen to me man listen to me
       self.looking_for_buy()
       return True
 

@@ -25,7 +25,7 @@ class LogType(Enum):
   ERROR = '[!]'
 
 class Strategy(ABC):
-  interval_timedelta = None
+  interval = None
   last_tick_datetime = None
   open_order = None
   position = None
@@ -53,10 +53,11 @@ class Strategy(ABC):
     print('check point loaded')
     
   def run(self, interval: str = '1m'):
-    self.interval_timedelta = timedelta(minutes=1)
+    self.interval = interval
     
     self.bm = BinanceSocketManager(self.binance_client)
-    ticks_conn_key = self.bm.start_kline_socket(self.pair, self._rootine, interval=interval)
+    _interval = '1m'
+    ticks_conn_key = self.bm.start_kline_socket(self.pair, self._rootine, interval=_interval)
     orders_conn_key = self.bm.start_user_socket(self.track_orders)
     
     self.setup()
@@ -82,7 +83,6 @@ class Strategy(ABC):
 
   def place_fake_order(self, order_type: OrderType, limit_price: float, qty: float):
     if order_type is OrderType.BUY or order_type is OrderType.SELL:
-      # self._open_postion(qty, limit_price)
       self.open_order = {
         'qty': qty,
         'price': limit_price,
@@ -201,8 +201,8 @@ class Strategy(ABC):
   def _rootine(self, msg):
     now = datetime.now()
 
-    if self.last_tick_datetime is not None and now - self.last_tick_datetime < self.interval_timedelta:
-      print('tick interval is less that 1m', now - self.last_tick_datetime)
+    if self.last_tick_datetime is not None and now - self.last_tick_datetime < self.interval:
+      print('tick interval is less than', self.interval, ':',now - self.last_tick_datetime)
       print('skip routine: not in interval')
       return False
 
@@ -225,15 +225,15 @@ class Strategy(ABC):
     if self.open_order['type'] is OrderType.BUY and self.last_price <= self.open_order['price']:
       self.logger.debug('yes fake buy')
       self._open_postion(self.open_order['qty'], self.last_price)
-      self.order_execution_hook()
       self.open_order = None
+      self.order_execution_hook()
       return True
 
     if self.open_order['type'] is OrderType.SELL and self.last_price >= self.open_order['price']:
       self.logger.debug('yes fake sell')
       self._close_position(self.last_price)
-      self.order_execution_hook()
       self.open_order = None
+      self.order_execution_hook()
       return True
 
     return False
