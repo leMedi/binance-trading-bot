@@ -4,6 +4,7 @@ from datetime import datetime
 from numpy import percentile
 import pandas as pd
 
+
 class DualMovingAvgs(Strategy):
 
   short_ma_period = 7
@@ -102,7 +103,7 @@ class DualMovingAvgs(Strategy):
   #   if returns >= 0.2:
       
 
-  def order_execution_hook(self):
+  def order_execution_hook(self, msg):
     # orders docs https://docs.binance.org/api-reference/dex-api/ws-streams.html
     if self.position != None:
       sell_at = self.calc_price(price=self.last_price , percentage=0.01)

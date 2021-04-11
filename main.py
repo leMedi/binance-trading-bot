@@ -18,13 +18,19 @@ interval=timedelta(seconds=30)
 
 
 FIAT = 'USDT'
-COINS = ['ENJ', 'DOGE', 'BTT'] 
+COINS = [
+  # {'name': 'BTT', 'price_precision': 7, 'qty_precision': 0},
+  {'name': 'DOGE', 'price_precision': 7, 'qty_precision': 0},
+  # {'name': 'VET', 'price_precision': 6, 'qty_precision': 0},
+]
+# COINS = ['DOGE', 'BTT'] 
 
-pairs = [coin+FIAT for coin in COINS]
+# pairs = [coin+FIAT for coin in COINS]
 
 bots = []
-for pair in pairs:
-  bot = DualMovingAvgs(name="DualMovingAvgs_{}_{}".format(pair, str_interval), binance_client=binance_client, pair=pair, initial_capital=100)
+for coin in COINS:
+  pair = '{}{}'.format(coin['name'], FIAT)
+  bot = DualMovingAvgs(name="DualMovingAvgs_{}_{}".format(pair, str_interval), binance_client=binance_client, pair=pair, initial_capital=11, price_precision=coin['price_precision'], qty_precision=coin['qty_precision'])
   bot.run(interval)
   bots.append(bot)
 

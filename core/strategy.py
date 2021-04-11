@@ -1,12 +1,15 @@
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+
 from enum import Enum
 from termcolor import cprint
+from core.utils import round_down
 from binance.websockets import BinanceSocketManager
 from pythonjsonlogger import jsonlogger
-import logging
 import logging.handlers
 import logging
+import json
+import os
 
 class OrderType(Enum):
   SELL = "BUY"
@@ -30,27 +33,56 @@ class Strategy(ABC):
   open_order = None
   position = None
 
+  price_precision=5
+  qty_precision=5
+
   order_history = list()
   last_price = None
+  
 
-  def __init__(self, name, binance_client, pair: str, initial_capital: float, precision = 5) -> None:
+  def __init__(self, name, binance_client, pair: str, initial_capital: float, price_precision = 5, qty_precision = 5) -> None:
     self.name = name
     self.binance_client = binance_client
     self.pair = pair
     self.initial_capital = initial_capital
     self._capital = initial_capital
 
-    self.precision = precision
+    self.price_precision = price_precision
+    self.qty_precision = qty_precision
+
+    self.checkpoint_file = os.path.join(os.getcwd(), 'checkpoints', "{}_checkpoint.json".format(name))
 
     self.init_logger(save_to_file=True)
-    # self.load_checkpoint()
+    self.load_checkpoint()
+
+  def save_checkpoint(self):
+    self.logger.debug("checkpoint: saving")
+    try:
+      checkpoint = {
+        'position': self.position,
+        'open_order': self.open_order
+      }
+      with open(self.checkpoint_file, 'w') as outfile:
+        json.dump(checkpoint, outfile)
+    except:
+      self.logger.error("checkpoint: error loading {}".format(self.checkpoint_file))
+      self.logger.exception("File not accessible")
 
 
   def load_checkpoint(self):
-    print('loading check point')
-    self._open_postion(40.2, 2.48504)
-    self.place_order(OrderType.SELL, 2.50989, OrderBy.QUANTITY, 40.2)
-    print('check point loaded')
+    self.logger.info('loading check point {}'.format(self.checkpoint_file))
+    try:
+      with open(self.checkpoint_file) as json_file:
+        checkpoint = json.load(json_file)
+        self.position = checkpoint['position']
+        self.open_order = checkpoint['open_order']
+        self.logger.info('checkpoint loaded - position: {}'.format(self.position))
+        self.logger.info('checkpoint loaded - open_order: {}'.format(self.open_order))
+    except IOError:
+        self.logger.error("checkpoint: error loading {}".format(self.checkpoint_file))
+        self.logger.exception("File not accessible")
+    # self._open_postion(40.2, 2.48504)
+    # self.place_order(OrderType.SELL, 2.50989, OrderBy.QUANTITY, 40.2)
     
   def run(self, interval: str = '1m'):
     self.interval = interval
@@ -68,26 +100,37 @@ class Strategy(ABC):
   def stop(self):
     self.bm.close()
 
-
   def place_real_order(self, order_type: OrderType, limit_price: float, qty: float):
     self.logger.info('[ORDER] New: {} qty {} at_price {}'.format(order_type, qty, limit_price))
     if order_type is OrderType.BUY:
-      self.open_order = self.binance_client.order_limit_buy(symbol=self.pair, quantity=qty, price=limit_price)
+      order = self.binance_client.order_limit_buy(symbol=self.pair, quantity=qty, price=limit_price)
+      # self.update_order(None)
     elif order_type is OrderType.SELL:
-      self.open_order = self.binance_client.order_limit_sell(symbol=self.pair, quantity=qty, price=limit_price)
+      order = self.binance_client.order_limit_sell(symbol=self.pair, quantity=qty, price=limit_price)
+      # self.update_order(None)
     else:
       self.logger.error('Unknow order type:', order_type)
       raise Exception('Unknow order type', order_type)
+    logging.info('order placed: {}'.format(json.dumps(self.open_order)))
     print('end place_order', self.open_order)
+
+  
+  # TODO: function to format binance order to my orders
 
 
   def place_fake_order(self, order_type: OrderType, limit_price: float, qty: float):
     if order_type is OrderType.BUY or order_type is OrderType.SELL:
-      self.open_order = {
+      # self.open_order = {
+      #   'qty': qty,
+      #   'price': limit_price,
+      #   'type': order_type
+      # }
+      self.update_order({
         'qty': qty,
         'price': limit_price,
         'type': order_type
-      }
+      })
+
       
     else:
       self.logger.error('Unknow order type:', order_type)
@@ -100,35 +143,61 @@ class Strategy(ABC):
     if order_by == OrderBy.VALUE:
       qty = value/limit_price
 
-    qty = round(qty, 1)
-    limit_price = round(limit_price, self.precision)
+    qty = round_down(qty, self.qty_precision)
+    limit_price = round_down(limit_price, self.price_precision)
 
     self.logger.info('[ORDER] new order: {} qty {} at_price {}'.format(order_type, qty,limit_price))
-    self.place_fake_order(order_type, limit_price, qty)
+    # self.place_fake_order(order_type, limit_price, qty)
+    self.place_real_order(order_type, limit_price, qty)
 
   def track_orders(self, msg: any):
     # orders docs https://docs.binance.org/api-reference/dex-api/ws-streams.html
-    self.logger.debug('track_orders: ', extra={'msg': msg})
-    print('track_orders: ', msg['e'])
+    self.logger.debug('track_orders: {}'.format(json.dumps(msg)))
+    print('track_orders - STATUS', msg['e'])
     if msg['e'] != 'executionReport' or msg['s'] != self.pair:
       print('not my order')
       return False
+    
+    
+    self.logger.debug('get till here: {}'.format(msg['X']))
 
-    print('new order filled', msg)
     if msg['X'] == 'NEW':
+      #  CHECK IF "X": "Ack",
       print('NEW', msg)
       # self.logger.info('[ORDER] Created: id', msg['i'], msg['S'], msg['q'], 'for', msg['p'])
       self.logger.info('[ORDER] Created: id {} {} {} for {}'.format( msg['i'], msg['S'], msg['q'], msg['p']))
-      self.open_order = True
+      self.update_order({
+        'id': msg['i'],
+        'qty': float(msg['q']),
+        'price': float(msg['p']),
+        'type': OrderType.BUY if msg['S'] == 'BUY' else OrderType.SELL
+      })
+      # self.open_order = {
+      #   'id': msg['i'],
+      #   'qty': float(msg['q']),
+      #   'price': float(msg['p']),
+      #   'type': OrderType.BUY if msg['S'] == 'BUY' else OrderType.SELL
+      # }
+      
       return True
 
     # TODO handle partial fills 'PartialFill'
-    if msg['X'] == 'FullyFill':
+    print('new order filled', msg)
+    # if msg['X'] == 'FullyFill':
+    # if msg['x'] == 'Trade' and msg['X'] == 'FILLED':
+    if msg['x'] == 'TRADE' and msg['X'] == 'FILLED':
+      print('order is here')
       # update position
       if msg['S'] == 'BUY':
-        self._open_postion(msg['z'], msg['p'])
+        self._open_postion(float(msg['z']), float(msg['p']))
       elif msg['S'] == 'SELL':
-        self._close_position(msg['p'])
+        self._close_position(float(msg['p']))
+      else:
+        self.logger.exception('what the fuck is this order')
+      self.update_order(None)
+      # self.open_order = None
+      print('track_orders filled', 'self.open_order', self.open_order)
+      print('track_orders filled', 'self.position', self.position)
       self.order_execution_hook(msg)
       
   def _open_postion(self, qty: float, entry_price: float):
@@ -139,6 +208,7 @@ class Strategy(ABC):
 
     # self.logger.info('[POSITION] OPENED', self.position)
     self.logger.info('[POSITION] OPENED {}'.format(self.position))
+    self.save_checkpoint()
 
   def _close_position(self, sold_at):
     returns = self.calc_roi(self.position['entry_price'], sold_at)
@@ -147,6 +217,17 @@ class Strategy(ABC):
     self._capital = new_capital
     self.logger.info('[POSITION] CLOSED => sold at: {} with gains of {}'.format(sold_at, returns))
     self.logger.info('[POSITION] CLOSED => new capital {}'.format(self._capital))
+    self.save_checkpoint()
+
+  def update_order(self, order):
+    self.open_order = order
+    self.save_checkpoint()
+    # {
+    #   'id': msg['i'],
+    #   'qty': float(msg['q']),
+    #   'price': float(msg['p']),
+    #   'type': OrderType.BUY if msg['S'] == 'BUY' else OrderType.SELL
+    # }
 
   def calc_roi(self, entry_price, exit_price):
     return exit_price/entry_price - 1
@@ -213,7 +294,7 @@ class Strategy(ABC):
       self.last_tick_datetime = now
       self.last_price = float(msg['k']['c'])
 
-      self.track_fake_orders()
+      # self.track_fake_orders()
 
       self.rootine(msg)
     except Exception:
@@ -228,15 +309,17 @@ class Strategy(ABC):
     if self.open_order['type'] is OrderType.BUY and self.last_price <= self.open_order['price']:
       self.logger.debug('yes fake buy')
       self._open_postion(self.open_order['qty'], self.last_price)
-      self.open_order = None
+      # self.open_order = None
+      self.update_order(None)
       self.order_execution_hook()
       return True
 
     if self.open_order['type'] is OrderType.SELL and self.last_price >= self.open_order['price']:
       self.logger.debug('yes fake sell')
       self._close_position(self.last_price)
-      self.open_order = None
-      self.order_execution_hook()
+      # self.open_order = None
+      self.update_order(None)
+      self.order_execution_hook(msg={})
       return True
 
     return False
@@ -253,5 +336,5 @@ class Strategy(ABC):
     pass
 
   @abstractmethod
-  def order_execution_hook(self):
+  def order_execution_hook(self, msg):
     pass
