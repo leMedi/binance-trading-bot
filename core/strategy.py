@@ -13,8 +13,8 @@ import json
 import os
 
 class OrderType(Enum):
-  SELL = "BUY"
-  BUY = "SELL"
+  SELL = "SELL"
+  BUY = "BUY"
 
 class OpenPositionType(Enum):
   OPEN = "OPEN"
@@ -63,7 +63,7 @@ class Strategy(ABC):
         'position': self.position,
         'open_order': self.open_order
       }
-      with open(self.checkpoint_file, 'w') as outfile:
+      with open(self.checkpoint_file, 'wb') as outfile:
         pickle.dump(checkpoint, outfile)
     except:
       self.logger.error("checkpoint: error loading {}".format(self.checkpoint_file))
@@ -73,8 +73,8 @@ class Strategy(ABC):
   def load_checkpoint(self):
     self.logger.info('loading check point {}'.format(self.checkpoint_file))
     try:
-      with open(self.checkpoint_file) as json_file:
-        checkpoint = pickle.load(json_file)
+      with open(self.checkpoint_file, 'rb') as pickle_file:
+        checkpoint = pickle.load(pickle_file)
         self.position = checkpoint['position']
         self.open_order = checkpoint['open_order']
         self.logger.info('checkpoint loaded - position: {}'.format(self.position))
@@ -282,18 +282,23 @@ class Strategy(ABC):
     
   def _rootine(self, msg):
     now = datetime.now()
-
-    if self.last_tick_datetime is not None and now - self.last_tick_datetime < self.interval:
-      print('tick interval is less than', self.interval, ':',now - self.last_tick_datetime)
-      print('skip routine: not in interval')
-      return False
-
-    if self.position != None:
-      self.logger.debug('postion is open - qty: {} returns: {}'.format(self.position['qty'], self.get_position_returns()))
-
     try:
+      last_price = float(msg['k']['c'])
+
+      if self.last_price is None:
+        self.last_price = last_price
+
+
+      if self.last_tick_datetime is not None and now - self.last_tick_datetime < self.interval:
+        print('tick interval is less than', self.interval, ':',now - self.last_tick_datetime)
+        print('skip routine: not in interval')
+        return False
+
+      if self.position != None:
+        self.logger.debug('postion is open - qty: {} returns: {}'.format(self.position['qty'], self.get_position_returns()))
+
       self.last_tick_datetime = now
-      self.last_price = float(msg['k']['c'])
+      self.last_price = last_price
 
       # self.track_fake_orders()
 

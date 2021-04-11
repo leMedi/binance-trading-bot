@@ -64,7 +64,7 @@ class DualMovingAvgs(Strategy):
 
     if self.open_order != None:
       # TODO: cancle unreachable orders
-      self.logger.debug('waiting for order to execute')
+      self.logger.debug('waiting for order to execute: type {} price {} qty {}'.format(self.open_order['type'].value, self.open_order['price'], self.open_order['qty']))
       return False
     
     if self.position == None:

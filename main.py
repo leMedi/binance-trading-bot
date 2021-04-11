@@ -1,5 +1,6 @@
 from datetime import timedelta
 from enum import Enum
+from core.strategy import OrderType
 import os
 from dotenv import load_dotenv
 from binance.client import Client
