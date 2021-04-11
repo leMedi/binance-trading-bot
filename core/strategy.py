@@ -7,6 +7,7 @@ from core.utils import round_down
 from binance.websockets import BinanceSocketManager
 from pythonjsonlogger import jsonlogger
 import logging.handlers
+import pickle
 import logging
 import json
 import os
@@ -50,7 +51,7 @@ class Strategy(ABC):
     self.price_precision = price_precision
     self.qty_precision = qty_precision
 
-    self.checkpoint_file = os.path.join(os.getcwd(), 'checkpoints', "{}_checkpoint.json".format(name))
+    self.checkpoint_file = os.path.join(os.getcwd(), 'checkpoints', "{}_checkpoint.pickle".format(name))
 
     self.init_logger(save_to_file=True)
     self.load_checkpoint()
@@ -63,7 +64,7 @@ class Strategy(ABC):
         'open_order': self.open_order
       }
       with open(self.checkpoint_file, 'w') as outfile:
-        json.dump(checkpoint, outfile)
+        pickle.dump(checkpoint, outfile)
     except:
       self.logger.error("checkpoint: error loading {}".format(self.checkpoint_file))
       self.logger.exception("File not accessible")
@@ -73,7 +74,7 @@ class Strategy(ABC):
     self.logger.info('loading check point {}'.format(self.checkpoint_file))
     try:
       with open(self.checkpoint_file) as json_file:
-        checkpoint = json.load(json_file)
+        checkpoint = pickle.load(json_file)
         self.position = checkpoint['position']
         self.open_order = checkpoint['open_order']
         self.logger.info('checkpoint loaded - position: {}'.format(self.position))
