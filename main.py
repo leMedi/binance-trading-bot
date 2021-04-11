@@ -21,8 +21,9 @@ interval=timedelta(seconds=30)
 FIAT = 'USDT'
 COINS = [
   # {'name': 'BTT', 'price_precision': 7, 'qty_precision': 0},
-  {'name': 'DOGE', 'price_precision': 7, 'qty_precision': 0},
-  # {'name': 'VET', 'price_precision': 6, 'qty_precision': 0},
+  # {'name': 'DOGE', 'price_precision': 7, 'qty_precision': 0},
+  {'name': 'NEO', 'price_precision': 3, 'qty_precision': 3},
+  {'name': 'VET', 'price_precision': 6, 'qty_precision': 0},
 ]
 # COINS = ['DOGE', 'BTT'] 
 
