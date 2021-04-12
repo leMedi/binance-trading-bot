@@ -7,8 +7,8 @@ import pandas as pd
 
 class DualMovingAvgs(Strategy):
 
-  short_ma_period = 7
-  long_ma_period = 25
+  short_ma_period = 2
+  long_ma_period = 5
   time_unit = 'minutes'
   _col_name = 'Close'
 
