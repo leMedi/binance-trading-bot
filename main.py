@@ -15,7 +15,7 @@ binance_client = Client(BINANCE_API_KEY, BINANCE_SECRET_KEY)
 
 # pair='ENJUSDT'
 str_interval='30s'
-interval=timedelta(seconds=30)
+interval=timedelta(minutes=1)
 
 
 FIAT = 'USDT'
