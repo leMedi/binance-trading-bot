@@ -35,7 +35,7 @@ COINS = [
 bots = []
 for coin in COINS:
   pair = '{}{}'.format(coin['name'], FIAT)
-  bot = DualMovingAvgs(name="DualMovingAvgs_{}_{}".format(pair, str_interval), binance_client=binance_client, pair=pair, initial_capital=30, price_precision=coin['price_precision'], qty_precision=coin['qty_precision'])
+  bot = DualMovingAvgs(name="DualMovingAvgs_{}_{}".format(pair, str_interval), binance_client=binance_client, pair=pair, initial_capital=33, price_precision=coin['price_precision'], qty_precision=coin['qty_precision'])
   bot.run(interval)
   bots.append(bot)
 
