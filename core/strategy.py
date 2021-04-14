@@ -290,8 +290,8 @@ class Strategy(ABC):
 
 
       if self.last_tick_datetime is not None and now - self.last_tick_datetime < self.interval:
-        print('tick interval is less than', self.interval, ':',now - self.last_tick_datetime)
-        print('skip routine: not in interval')
+        # print('tick interval is less than', self.interval, ':',now - self.last_tick_datetime)
+        # print('skip routine: not in interval')
         return False
 
       if self.position != None:
